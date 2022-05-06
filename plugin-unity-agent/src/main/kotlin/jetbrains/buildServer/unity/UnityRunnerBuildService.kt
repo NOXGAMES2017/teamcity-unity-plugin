@@ -192,7 +192,11 @@ class UnityRunnerBuildService(
                     arguments.addAll(listOf(ARG_RUN_TESTS, "-testPlatform", testPlatform))
                 }
             } else {
-                arguments.add("-quit")
+                runnerParameters[UnityConstants.PARAM_NO_QUIT]?.let {
+                    if (!it.toBoolean()) {
+                        arguments.add("-quit")
+                    }
+                }
                 return
             }
         }

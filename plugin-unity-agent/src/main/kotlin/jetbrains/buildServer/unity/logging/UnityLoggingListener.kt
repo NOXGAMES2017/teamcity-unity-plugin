@@ -32,37 +32,52 @@ class UnityLoggingListener(private val logger: BuildProgressLogger,
     private val currentBlock: LogBlock
         get() = if (blocks.isEmpty()) defaultBlock else blocks.peek()
 
+
     override fun onStandardOutput(text: String) {
+        /*
         currentBlock.apply {
             if (isBlockEnd(text)) {
                 when (logLastLine) {
                     LogType.Outside -> {
                         logBlockClosed(name)
                         blocks.pop()
-                        logMessage(text)
+                        // logMessage(text)
                     }
                     LogType.Inside -> {
                         logMessage(text)
                         logBlockClosed(name)
                         blocks.pop()
+                        return
                     }
                     else -> {
                         logBlockClosed(name)
                         blocks.pop()
+                        return
                     }
                 }
-                return
             }
+        }
+        */
+        var blockClosed = false
+        var lastLineLogType = currentBlock.logLastLine
+        var previousBlockLastLineLogType = currentBlock.logLastLine
+        while (tryCloseCurrentBlock(text)) {
+            if (blockClosed)
+                lastLineLogType = previousBlockLastLineLogType
+            blockClosed = true
+            previousBlockLastLineLogType = currentBlock.logLastLine
         }
 
         val foundBlock = loggers.firstOrNull {
             it.isBlockStart(text)
         }
         if (foundBlock != null && foundBlock != currentBlock) {
+            /* WHY?
             if (currentBlock != defaultBlock) {
                 logBlockClosed(currentBlock.name)
                 blocks.pop()
             }
+            */
             foundBlock.apply {
                 when (logFirstLine) {
                     LogType.Outside -> {
@@ -82,9 +97,36 @@ class UnityLoggingListener(private val logger: BuildProgressLogger,
                 }
             }
         } else {
-            logMessage(text)
+            if (!blockClosed || lastLineLogType == LogType.Outside) logMessage(text)
         }
     }
+
+
+    private fun tryCloseCurrentBlock(text: String): Boolean {
+        currentBlock.apply {
+            if (isBlockEnd(text)) {
+                when (logLastLine) {
+                    LogType.Outside -> {
+                        logBlockClosed(name)
+                        blocks.pop()
+                        // logMessage(text)
+                    }
+                    LogType.Inside -> {
+                        logMessage(text)
+                        logBlockClosed(name)
+                        blocks.pop()
+                    }
+                    else -> {
+                        logBlockClosed(name)
+                        blocks.pop()
+                    }
+                }
+                return true
+            }
+        }
+        return false
+    }
+
 
     private fun logMessage(text: String) {
         val message = currentBlock.getText(text)
@@ -94,6 +136,7 @@ class UnityLoggingListener(private val logger: BuildProgressLogger,
             LineStatus.Error -> BuildProblem(message).asString()
             else -> message
         }
+
         logger.message(serviceMessage)
     }
 
@@ -118,9 +161,16 @@ class UnityLoggingListener(private val logger: BuildProgressLogger,
                 PerformanceBlock(),
                 PlayerStatisticsBlock(),
                 PrepareBlock(),
-                RefreshBlock(),
+                //RefreshBlock(),
                 ScriptCompilationBlock(),
-                UpdateBlock()
+                UpdateBlock(),
+                AssetDatabaseInitialScriptRefreshBlock(),
+                AssetDatabaseRefreshBlock(),
+                MonoManagerReloadAssemblyBlock(),
+                UnityStackTraceBlock(),
+                DomainReloadProfilingBlock(),
+                RefreshInfoBlock(),
+                UnityStackTraceFromCoroutineBlock()
         )
     }
 }
