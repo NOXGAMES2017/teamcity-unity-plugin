@@ -131,3 +131,9 @@ For issues please consider opening related ticket in our [YouTrack][youtrack].
 [plugin-descriptor]: https://plugins.jetbrains.com/docs/teamcity/plugins-packaging.html#Tools
 [plugin-descriptor.executables]: https://plugins.jetbrains.com/docs/teamcity/plugins-packaging.html#Making+File+Executable
 [youtrack]: https://youtrack.jetbrains.com/newIssue?project=TW&c=Team%20Build%20Tools%20Integrations&c=tag%20tc-unity
+
+#HOW TO BUILD PLUGIN
+
+Open project in IntellijIdea
+Open Gradle tab
+Expand teamcity-unity-plugin, Tasks, build and doubleclick assemble
