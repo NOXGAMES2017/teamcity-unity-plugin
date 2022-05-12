@@ -170,7 +170,12 @@ class UnityLoggingListener(private val logger: BuildProgressLogger,
                 UnityStackTraceBlock(),
                 DomainReloadProfilingBlock(),
                 RefreshInfoBlock(),
-                UnityStackTraceFromCoroutineBlock()
+                UnityStackTraceFromCoroutineBlock(),
+                ManifestCurrentFilesBlock(),
+                ManifestParsingBlock(),
+                MonoDependenciesBlock(),
+                CompilingShaderBlock(),
+                UnityAnotherStackTraceFromCoroutineBlock()
         )
     }
 }
