@@ -74,3 +74,9 @@ This project uses Gradle as the build system. You can easily open it in [Intelli
 # Contributions
 
 We appreciate all kinds of feedback, so please feel free to send a PR or submit an issue.
+
+#HOW TO BUILD PLUGIN
+
+Open project in IntellijIdea
+Open Gradle tab
+Expand teamcity-unity-plugin, Tasks, build and doubleclick assemble
