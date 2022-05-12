@@ -1,8 +1,8 @@
 package jetbrains.buildServer.unity.logging
 
-class RefreshInfoBlock : LogBlock {
+class UnityAnotherStackTraceFromCoroutineBlock : LogBlock {
 
-    override val name = "RefreshInfo - more:"
+    override val name = "..."
 
     override val logFirstLine = LogType.Inside
 
@@ -10,12 +10,12 @@ class RefreshInfoBlock : LogBlock {
 
     override fun isBlockStart(text: String) = blockStart.containsMatchIn(text)
 
-    override fun isBlockEnd(text: String) = blockEnd.containsMatchIn(text)
+    override fun isBlockEnd(text: String) = !blockEnd.containsMatchIn(text)
 
     override fun getText(text: String) = text
 
     companion object {
-        private val blockStart = Regex("InvokeBeforeRefreshCallbacks: .*")
-        private val blockEnd = Regex("Untracked:.*")
+        private val blockStart = Regex(".*#0 GetStacktrace(int).*")
+        private val blockEnd = Regex(".*#\\d+.*")
     }
 }
