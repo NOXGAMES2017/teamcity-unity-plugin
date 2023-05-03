@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import org.jetbrains.changelog.Changelog
+// import org.jetbrains.changelog.Changelog
 
 plugins {
     id 'io.github.rodm.teamcity-server' version "$gradleTeamcityPluginVersion"
@@ -22,10 +22,10 @@ plugins {
     id 'org.jetbrains.changelog' version "$jetbrainsChangelogPluginVersion"
 }
 
-changelog {
+/*changelog {
     path = file("../CHANGELOG.md").canonicalPath
     groups = ["Added", "Changed", "Fixed"]
-}
+}*/
 
 teamcity {
     setVersion(teamcityVersion)
@@ -39,10 +39,12 @@ teamcity {
                 TeamCity_Min_Compatible_Build: "116751" // 2022.10
         ]
 
+        /*
         publish {
             token = project.findProperty("jetbrains.marketplace.token")
             notes = changelog.renderItem(changelog.getLatest(), Changelog.OutputType.HTML)
         }
+        */
     }
 
     environments {
