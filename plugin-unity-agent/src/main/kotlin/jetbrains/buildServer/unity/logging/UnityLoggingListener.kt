@@ -25,8 +25,10 @@ import jetbrains.buildServer.messages.serviceMessages.Message
 import jetbrains.buildServer.unity.messages.BuildProblem
 import java.util.*
 
-class UnityLoggingListener(private val logger: BuildProgressLogger,
-                           private val problemsProvider: LineStatusProvider) : ProcessListenerAdapter() {
+class UnityLoggingListener(
+    private val logger: BuildProgressLogger,
+    private val problemsProvider: LineStatusProvider
+) : ProcessListenerAdapter() {
 
     private var blocks = Stack<LogBlock>()
     private val currentBlock: LogBlock
@@ -85,11 +87,13 @@ class UnityLoggingListener(private val logger: BuildProgressLogger,
                         logBlockOpened(name)
                         blocks.push(this)
                     }
+
                     LogType.Inside -> {
                         logBlockOpened(name)
                         blocks.push(this)
                         logMessage(text)
                     }
+
                     else -> {
                         logBlockOpened(name)
                         blocks.push(this)
@@ -111,11 +115,13 @@ class UnityLoggingListener(private val logger: BuildProgressLogger,
                         blocks.pop()
                         // logMessage(text)
                     }
+
                     LogType.Inside -> {
                         logMessage(text)
                         logBlockClosed(name)
                         blocks.pop()
                     }
+
                     else -> {
                         logBlockClosed(name)
                         blocks.pop()
@@ -151,31 +157,34 @@ class UnityLoggingListener(private val logger: BuildProgressLogger,
     companion object {
         private val defaultBlock = DefaultBlock()
         private val loggers = listOf(
-                BuildReportBlock(),
-                CommandLineBlock(),
-                CompileBlock(),
-                ExtensionsBlock(),
-                LightmapBlock(),
-                MonoBlock(),
-                PackageManagerBlock(),
-                PerformanceBlock(),
-                PlayerStatisticsBlock(),
-                PrepareBlock(),
-                //RefreshBlock(),
-                ScriptCompilationBlock(),
-                UpdateBlock(),
-                AssetDatabaseInitialScriptRefreshBlock(),
-                AssetDatabaseRefreshBlock(),
-                MonoManagerReloadAssemblyBlock(),
-                UnityStackTraceBlock(),
-                DomainReloadProfilingBlock(),
-                RefreshInfoBlock(),
-                UnityStackTraceFromCoroutineBlock(),
-                ManifestCurrentFilesBlock(),
-                ManifestParsingBlock(),
-                MonoDependenciesBlock(),
-                CompilingShaderBlock(),
-                UnityAnotherStackTraceFromCoroutineBlock()
+            BuildReportBlock(),
+            CommandLineBlock(),
+            CompileBlock(),
+            ExtensionsBlock(),
+            LightmapBlock(),
+            MonoBlock(),
+            PackageManagerBlock(),
+            PerformanceBlock(),
+            PlayerStatisticsBlock(),
+            PrepareBlock(),
+            //RefreshBlock(),
+            ScriptCompilationBlock(),
+            UpdateBlock(),
+            AssetDatabaseInitialScriptRefreshBlock(),
+            AssetDatabaseRefreshBlock(),
+            MonoManagerReloadAssemblyBlock(),
+            UnityStackTraceBlock(),
+            DomainReloadProfilingBlock(),
+            RefreshInfoBlock(),
+            UnityStackTraceFromCoroutineBlock(),
+            ManifestCurrentFilesBlock(),
+            ManifestParsingBlock(),
+            MonoDependenciesBlock(),
+            CompilingShaderBlock(),
+            UnityAnotherStackTraceFromCoroutineBlock(),
+            IL2CppProgressBlock(),
+            StartImportingBlock(),
+            MemoryStatisticsBlock()
         )
     }
 }
