@@ -5,7 +5,8 @@ package jetbrains.buildServer.unity.logging
 enum class LineStatus {
     Normal,
     Warning,
-    Error;
+    Error,
+    NonFatalFailure;
 
     companion object {
         fun parse(text: String): LineStatus? {
