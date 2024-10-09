@@ -21,7 +21,9 @@ The plugin supports building Unity projects on TeamCity.
 
 This [TeamCity build feature](https://confluence.jetbrains.com/display/TCDL/Adding+Build+Features) allows to **automatically activate and return Unity Editor license** before build start and after build completion.
 
-Also it allows to configure **Unity cache server** address in one place to use this setting within Unity build steps. 
+Additionally, it allows you to configure the address for the assets caching proxy,
+which can be either the [Cache server][cache-server] or the [Unity accelerator][unity-accelerator].
+The appropriate arguments will be used based on the asset pipeline version used in the project.
 
 # Download
 
@@ -31,7 +33,16 @@ You can [download the plugin](https://plugins.jetbrains.com/plugin/11453-unity-s
 
 # Compatibility
 
-The plugin is compatible with [TeamCity](https://www.jetbrains.com/teamcity/download/) 2018.1+ and was verified to work with Unity 2017+.
+The plugin is compatible with:
+* [TeamCity](https://www.jetbrains.com/teamcity/download/) 2022.10 and above.
+
+  Currently, it still supports all the Java versions that TeamCity
+  [supports](https://www.jetbrains.com/help/teamcity/supported-platforms-and-environments.html#Supported+Java+Versions+for+TeamCity+Server),
+  though it will be moved to Java 11 in the future.
+  Please consider upgrading the Java version your TeamCity instance is running on.
+
+
+* Unity 2017 and above.
 
 # Configuration
 
@@ -83,24 +94,11 @@ To create a tool zip file for Unity, do the following:
     │  |- 📄 Unity.exe
     │  |- ...
     ```
-   Note that the archive structure may vary depending on the distributed binaries. 
+   Note that the archive structure may vary depending on the distributed binaries.
    For example, when packing for MacOS, the top-level folder inside the archive should be `Unity.app`.
 3. Upload as a Unity Tool on the Administration > Tools page on TeamCity
 
 #### NB!
-- Due to the current limitation of TeamCity tool distribution, preserving file permissions
-for Unix-like platforms is only possible with additional configuration. Namely, a plugin descriptor 
-should [list][plugin-descriptor.executables] all files in the archive which are needed to be executable after unpacking on an agent.
-
-    An example of this list for MacOS tool descriptor might be:
-    ```xml
-    <executable-files>
-       <include name='Unity.app/Contents/MacOS/Unity'/>
-       <include name='Unity.app/Contents/Resources/PackageManager/Server/UnityPackageManager'/>
-       ...
-    </executable-files>
-    ```
-    Feel free to upvote [TW-21673](https://youtrack.jetbrains.com/issue/TW-21673) issue to make it work out of the box.
 - Agent environment must contain all the required global dependencies to make Unity work on a given OS.
 
 
@@ -114,16 +112,30 @@ The integration works only with `2023.09` and above versions of TeamCity.
 
 This problem indicates that the Unity Editor installation was not found on any of build agent machines. Check that you have [installed Editor](https://unity3d.com/get-unity/download) on your build agents and machines were [properly configured](#configuration).
 
-# Build
+## How to Contribute
 
-This project uses Gradle as the build system. You can easily open it in [IntelliJ IDEA](https://www.jetbrains.com/idea/help/importing-project-from-gradle-model.html) or [Eclipse](http://gradle.org/eclipse/).
+We place a high value on user feedback and encourage you to share your experience and suggestions.
+Send a Pull Request to contribute or contact us via [YouTrack][youtrack] to report an issue.
 
-# Contributing
+## Development
 
-We appreciate all kinds of feedback, so please feel free to send a PR or submit an issue.
-For issues please consider opening related ticket in our [YouTrack][youtrack].
+### Prerequisites
 
-# Documentation
+* JDK 8
+
+### Building
+
+1. Clone the repo
+2. Setup local git hooks
+    ```shell
+    git config --local core.hooksPath .githooks
+    ```
+3. Build the project using Gradle
+    ```shell
+    ./gradlew build
+    ```
+
+## Additional Resources
 
 - [Changelog](CHANGELOG.md)
 - [Maintainership](MAINTAINERSHIP.md)
@@ -131,9 +143,5 @@ For issues please consider opening related ticket in our [YouTrack][youtrack].
 [plugin-descriptor]: https://plugins.jetbrains.com/docs/teamcity/plugins-packaging.html#Tools
 [plugin-descriptor.executables]: https://plugins.jetbrains.com/docs/teamcity/plugins-packaging.html#Making+File+Executable
 [youtrack]: https://youtrack.jetbrains.com/newIssue?project=TW&c=Team%20Build%20Tools%20Integrations&c=tag%20tc-unity
-
-#HOW TO BUILD PLUGIN
-
-Open project in IntellijIdea
-Open Gradle tab
-Expand teamcity-unity-plugin, Tasks, build and doubleclick assemble
+[cache-server]: https://docs.unity3d.com/2019.2/Documentation/Manual/CacheServer.html
+[unity-accelerator]: https://docs.unity3d.com/Manual/UnityAccelerator.html

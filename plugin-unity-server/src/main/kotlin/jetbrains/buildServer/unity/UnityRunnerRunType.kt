@@ -54,12 +54,10 @@ class UnityRunnerRunType(
         return pluginDescriptor.getPluginResourcesPath("viewUnityParameters.jsp")
     }
 
-    override fun getDefaultRunnerProperties(): MutableMap<String, String> {
-        val parameters = mutableMapOf<String,String>()
-        parameters[UnityConstants.PARAM_DETECTION_MODE] = UnityConstants.DETECTION_MODE_AUTO
-
-        return parameters
-    }
+    override fun getDefaultRunnerProperties(): MutableMap<String, String> = mapOf(
+        UnityConstants.PARAM_DETECTION_MODE to UnityConstants.DETECTION_MODE_AUTO,
+        UnityConstants.PARAM_UNITY_LICENSE_SCOPE to UnityLicenseScope.BUILD_STEP.id,
+    ).toMutableMap()
 
     override fun describeParameters(parameters: Map<String, String>): String {
         val builder = StringBuilder()
@@ -110,13 +108,14 @@ class UnityRunnerRunType(
     }
 
     override fun supports(runTypeExtension: RunTypeExtension): Boolean {
-        if (runTypeExtension is PositionAware && runTypeExtension.orderId == DOCKER_WRAPPER_ID)
+        if (runTypeExtension is PositionAware && runTypeExtension.orderId == DOCKER_WRAPPER_ID) {
             return true
+        }
         return super.supports(runTypeExtension)
     }
 
     private fun escapeRegex(value: String) =
-        if(value.contains('%')) value else value.replace(".", "\\.")
+        if (value.contains('%')) value else value.replace(".", "\\.")
 
     private fun StringBuilder.addParameter(parameter: String) {
         if (this.isNotEmpty()) {

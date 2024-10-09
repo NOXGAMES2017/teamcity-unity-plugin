@@ -3,7 +3,7 @@
 package jetbrains.buildServer.unity
 
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.util.SystemInfo
+import com.intellij.openapi.util.TCSystemInfo
 import jetbrains.buildServer.agent.BuildRunnerContext
 import jetbrains.buildServer.agent.runner.BuildServiceAdapter
 import jetbrains.buildServer.agent.runner.ProgramCommandLine
@@ -43,9 +43,13 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.io.RandomAccessFile
 import kotlin.io.path.absolutePathString
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
+import kotlin.time.toJavaDuration
 
 class UnityRunnerBuildService(
     private val unityEnvironment: UnityEnvironment,
+    private val unityProject: UnityProject,
     private val overriddenRunnerParameters: Map<String, String>,
     private val fileSystemService: FileSystemService,
 ) : BuildServiceAdapter() {
@@ -109,7 +113,7 @@ class UnityRunnerBuildService(
         addLogArgIfNotExists(arguments, unityVersion)
 
         createLineStatusesFile()
-        addArgsFromBuildFeature(arguments)
+        addArgsFromBuildFeature(arguments, unityProject)
 
         return createProgramCommandline(unityPath, arguments)
     }
@@ -168,11 +172,23 @@ class UnityRunnerBuildService(
         }
     }
 
-    private fun addArgsFromBuildFeature(arguments: MutableList<String>) {
+    private fun addArgsFromBuildFeature(arguments: MutableList<String>, unityProject: UnityProject) {
         build.getBuildFeaturesOfType(BUILD_FEATURE_TYPE).firstOrNull()?.let { feature ->
-            feature.parameters[PARAM_CACHE_SERVER]?.let {
-                if (it.isNotEmpty()) {
-                    arguments.addAll(listOf(ARG_CACHE_SERVER_IP_ADDRESS, it.trim()))
+            val cacheServerParam = feature.parameters[PARAM_CACHE_SERVER]?.trim()
+            if (!cacheServerParam.isNullOrEmpty()) {
+                when (unityProject.assetPipelineVersion) {
+                    null, AssetPipelineVersion.V1 -> {
+                        val cacheServerLog = "Asset Pipeline version is either not specified or is V1. Arguments for the old cache server will be used"
+                        logger.message(cacheServerLog)
+                        LOG.info(cacheServerLog)
+                        arguments.addAll(listOf(ARG_CACHE_SERVER_IP_ADDRESS, cacheServerParam))
+                    }
+                    AssetPipelineVersion.V2 -> {
+                        val unityAcceleratorLog = "Asset Pipeline version is determined as V2. Arguments for the new Unity Accelerator cache server will be used"
+                        logger.message(unityAcceleratorLog)
+                        LOG.info(unityAcceleratorLog)
+                        arguments.addAll(listOf(ARG_ENABLE_CACHE_SERVER, ARG_CACHE_SERVER_ENDPOINT, cacheServerParam))
+                    }
                 }
             }
         }
@@ -212,7 +228,7 @@ class UnityRunnerBuildService(
                     arguments.addAll(listOf(ARG_RUN_TESTS, ARG_TEST_PLATFORM, testPlatform))
                 }
             } else {
-				val shouldAddQuitArg = !parameters.value[PARAM_NO_QUIT].toBoolean()
+                val shouldAddQuitArg = !parameters.value[PARAM_NO_QUIT].toBoolean()
                 if (shouldAddQuitArg) {
                     arguments.add(ARG_QUIT)
                 }
@@ -260,8 +276,8 @@ class UnityRunnerBuildService(
     override fun afterProcessFinished() {
         unityLogFileTailer?.apply {
             // Wait while Tailer will complete read
-            Thread.sleep(DEFAULT_DELAY_MILLIS)
-            stop()
+            Thread.sleep(TAIL_DELAY_DURATION.toMillis())
+            close()
         }
         unityTestsReportFile?.let {
             if (it.exists()) {
@@ -284,8 +300,8 @@ class UnityRunnerBuildService(
         // On Windows unity could not write log into stdout, so we need to read a log file contents:
         // https://issuetracker.unity3d.com/issues/command-line-logfile-with-no-parameters-outputs-to-screen-on-os-x-but-not-on-windows
         // Was resolved in 2019.1 but only for -logFile with -nographics option
-        fun currentSetupSupportsConsoleOutput() = !SystemInfo.isWindows
-                || (version >= UNITY_2019_1_0 && verbosityArg == ARG_LOG_FILE && arguments.contains(ARG_NO_GRAPHICS))
+        fun currentSetupSupportsConsoleOutput() = !TCSystemInfo.isWindows ||
+            (version >= UNITY_2019_1_0 && verbosityArg == ARG_LOG_FILE && arguments.contains(ARG_NO_GRAPHICS))
 
         if (logFilePath.isNullOrEmpty() && currentSetupSupportsConsoleOutput()) {
             arguments.add("-")
@@ -302,17 +318,21 @@ class UnityRunnerBuildService(
 
         arguments.add(resolvePath(logPath.absolutePathString()))
 
-        unityLogFileTailer = Tailer.create(logPath.toFile(), object : TailerListenerAdapter() {
-            override fun handle(line: String) {
-                listeners.forEach {
-                    it.onStandardOutput(line)
+        unityLogFileTailer = Tailer.builder()
+            .setFile(logPath.toFile())
+            .setTailFromEnd(false)
+            .setDelayDuration(TAIL_DELAY_DURATION)
+            .setTailerListener(object : TailerListenerAdapter() {
+                override fun handle(line: String) {
+                    listeners.forEach {
+                        it.onStandardOutput(line)
+                    }
                 }
-            }
 
-            override fun fileRotated() {
-                unityLogFileTailer?.stop()
-            }
-        }, DEFAULT_DELAY_MILLIS, false)
+                override fun fileRotated() {
+                    unityLogFileTailer?.close()
+                }
+            }).get()
     }
 
     private fun hasCustomLogArg() = arrayOf(ARG_LOG_FILE, ARG_CLEANED_LOG_FILE)
@@ -335,13 +355,14 @@ class UnityRunnerBuildService(
     }
 
     private fun resolvePath(path: String) =
-        if (runnerContext.isVirtualContext)
+        if (runnerContext.isVirtualContext) {
             runnerContext.virtualContext.resolvePath(path)
-        else path
+        } else {
+            path
+        }
 
     companion object {
         private val LOG = Logger.getInstance(UnityRunnerBuildService::class.java.name)
-        private const val DEFAULT_DELAY_MILLIS = 500L
 
         private const val ARG_BATCH_MODE = "-batchmode"
         private const val ARG_PROJECT_PATH = "-projectPath"
@@ -362,22 +383,30 @@ class UnityRunnerBuildService(
         private const val ARG_NO_GRAPHICS = "-nographics"
         private const val ARG_QUIT = "-quit"
         private const val ARG_CACHE_SERVER_IP_ADDRESS = "-CacheServerIPAddress"
+        private const val ARG_ENABLE_CACHE_SERVER = "-EnableCacheServer"
+        private const val ARG_CACHE_SERVER_ENDPOINT = "-cacheServerEndpoint"
 
         private const val LOG_FILE_ACCESS_MODE = "rw"
 
         private val RUN_TESTS_REGEX = Regex("-run(Editor)?Tests")
         private val RUN_TEST_RESULTS_REGEX = Regex("-(editorTestsResultFile|testResults)")
+        private val TAIL_DELAY_DURATION = 500L.toDuration(DurationUnit.MILLISECONDS).toJavaDuration()
 
         fun createAdapters(
             unityEnvironment: UnityEnvironment,
-            context: BuildRunnerContext,
+            context: UnityBuildRunnerContext,
             fileSystemService: FileSystemService,
         ) = getParameterVariants(context)
             .ifEmpty {
                 sequenceOf(emptyMap())
             }
             .map {
-                UnityRunnerBuildService(unityEnvironment, it, fileSystemService)
+                UnityRunnerBuildService(
+                    unityEnvironment,
+                    context.unityProject,
+                    it,
+                    fileSystemService,
+                )
             }
 
         private fun getParameterVariants(context: BuildRunnerContext) = sequence {

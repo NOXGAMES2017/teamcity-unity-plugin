@@ -1,5 +1,3 @@
-
-
 package jetbrains.buildServer.unity.logging
 
 enum class LineStatus {
@@ -10,7 +8,7 @@ enum class LineStatus {
 
     companion object {
         fun parse(text: String): LineStatus? {
-            return values().firstOrNull {
+            return entries.firstOrNull {
                 it.name.equals(text.trim(), true)
             }
         }

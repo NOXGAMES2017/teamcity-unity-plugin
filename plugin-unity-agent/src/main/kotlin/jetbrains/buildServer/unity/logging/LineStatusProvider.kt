@@ -12,7 +12,8 @@ class LineStatusProvider {
     private val patterns = mutableListOf<Pair<Regex, LineStatus>>()
 
     constructor() {
-        patterns.addAll(listOf(
+        patterns.addAll(
+            listOf(
                 Regex(".*?warning CS\\d+.*?") to LineStatus.Warning,
                 Regex("WARNING.*") to LineStatus.Warning,
                 Regex(".*?error CS\\d+.*?") to LineStatus.NonFatalFailure,

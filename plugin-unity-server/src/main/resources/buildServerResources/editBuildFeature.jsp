@@ -13,6 +13,9 @@
     .invisibleUpload input[type='file'] {
         color: transparent;
     }
+    .preserveLineBreaks {
+        white-space: pre-line;
+    }
 </style>
 
 <script type="text/javascript">
@@ -149,6 +152,22 @@
 </tr>
 <tbody id="professionalLicense">
 <tr>
+    <th class="noBorder">
+        <label for="${params.unityLicenseScopeName}">License scope:</label>
+    </th>
+    <td>
+        <props:selectProperty name="${params.unityLicenseScopeName}" enableFilter="true" className="mediumField">
+            <c:forEach var="option" items="${params.unityLicenseScopeValues}">
+                <props:option value="${option.id}">
+                    <c:out value="${option.displayName}"/>
+                </props:option>
+            </c:forEach>
+        </props:selectProperty>
+        <span class="error" id="error_${params.unityLicenseScopeName}"></span>
+        <span class="smallNote preserveLineBreaks">${params.unityLicenseScopeDescription}</span>
+    </td>
+</tr>
+<tr>
     <th class="noBorder"><label for="${params.serialNumber}">Serial number:</label></th>
     <td>
         <props:passwordProperty name="${params.serialNumber}" className="longField" />
@@ -186,7 +205,11 @@
 <tr>
   <th class="withTopBorder">
       <label for="${params.cacheServer}">
-          Cache server address: <bs:help urlPrefix="https://docs.unity3d.com/Manual/CacheServer.html" file=""/>
+          Cache server address: <bs:help
+              urlPrefix="https://docs.unity3d.com/Manual/UnityAccelerator.html"
+              file=""
+              shortHelp="This could be either the former Cache Server or the new Unity Accelerator. <br/>
+              The appropriate arguments will be used based on the asset pipeline version in your project."/>
       </label>
   </th>
   <td class="withTopBorder">

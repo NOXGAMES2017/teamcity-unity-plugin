@@ -10,24 +10,22 @@ import jetbrains.buildServer.agent.*
 import jetbrains.buildServer.messages.BlockData
 import jetbrains.buildServer.unity.UnityEnvironment
 import jetbrains.buildServer.unity.UnityVersion
+import jetbrains.buildServer.unity.license.commands.ActivateProLicenseCommand
 import jetbrains.buildServer.unity.util.FileSystemService
 import org.testng.annotations.BeforeMethod
 import org.testng.annotations.Test
 import java.io.File
 import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
 
 class ActivateProLicenseCommandTest {
 
-    private val runnerContext = mockk<BuildRunnerContext>()
-    private val virtualContext = mockk<VirtualContext>()
     private val build = mockk<AgentRunningBuild>()
-    private val buildLogger = mockk<BuildProgressLogger>()
-    private val buildParameters = mockk<BuildParametersMap>()
+    private val buildLogger = mockk<FlowLogger>(relaxed = true)
     private val buildFeature = mockk<AgentBuildFeature>()
 
     private val fileSystemService = mockk<FileSystemService>()
-    private val workingDirectory = mockk<File>()
     private val workingDirectoryPath = "/path/to/workingDir"
     private val agentTempDirectory = mockk<File>()
 
@@ -35,18 +33,15 @@ class ActivateProLicenseCommandTest {
     fun setUp() {
         clearAllMocks()
 
-        every { runnerContext.virtualContext } returns virtualContext
-        every { runnerContext.build } returns build
-        every { runnerContext.buildParameters } returns buildParameters
-        every { runnerContext.workingDirectory } returns workingDirectory
+        every { agentTempDirectory.toPath() } returns Paths.get("temp")
 
-        every { virtualContext.resolvePath(any()) } returnsArgument 0
-        every { buildFeature.parameters } returns mapOf()
-        every { buildParameters.environmentVariables } returns mapOf()
-        every { workingDirectory.path } returns workingDirectoryPath
+        every { fileSystemService.createTempFile(any(), any(), any()) } returns Paths.get("foo")
+
+        every { buildLogger.getFlowLogger(any()) } returns buildLogger
+        every { build.buildLogger } returns buildLogger
 
         every { build.getBuildFeaturesOfType(any()) } returns listOf(buildFeature)
-        every { build.buildLogger } returns buildLogger
+
         every { build.agentTempDirectory } returns agentTempDirectory
         every { build.buildId } returns 1
     }
@@ -84,31 +79,29 @@ class ActivateProLicenseCommandTest {
                 "-quit", "-batchmode", "-nographics",
                 "-serial", "someSerialNumber", "-username", "someUsername", "-password", "somePassword",
                 "-logFile", logPath,
-            )
+            ),
         )
     }
 
     @Test
-    fun `should open a log block when process is started`() {
+    fun `should open a log block before process started`() {
         // arrange
-        val commandLine = aCommandLine()
         val command = createInstance()
 
         every { buildLogger.logMessage(any()) } returns Unit
         every { buildLogger.message(any()) } returns Unit
 
         // act
-        command.processStarted(commandLine, workingDirectory)
+        command.beforeProcessStarted()
 
         // assert
         verify(exactly = 1) {
-            buildLogger.logMessage(withArg {
-                it.value shouldBe BlockData("Activate Unity license", "unity")
-                it.typeId shouldBe "BlockStart"
-            })
-        }
-        verify(exactly = 1) {
-            buildLogger.message("Starting: $commandLine")
+            buildLogger.logMessage(
+                withArg {
+                    it.value shouldBe BlockData("Activate Unity license", "unity")
+                    it.typeId shouldBe "BlockStart"
+                },
+            )
         }
     }
 
@@ -123,10 +116,12 @@ class ActivateProLicenseCommandTest {
 
         // assert
         verify(exactly = 1) {
-            buildLogger.logMessage(withArg {
-                it.value shouldBe BlockData("Activate Unity license", "unity")
-                it.typeId shouldBe "BlockEnd"
-            })
+            buildLogger.logMessage(
+                withArg {
+                    it.value shouldBe BlockData("Activate Unity license", "unity")
+                    it.typeId shouldBe "BlockEnd"
+                },
+            )
         }
     }
 
@@ -136,13 +131,15 @@ class ActivateProLicenseCommandTest {
         return UnityEnvironment(unityPath, unityVersion)
     }
 
-    private fun aCommandLine(): String {
-        return """
-            /path/to/unity -quit -batchmode -nographics 
-            -serial someSerial -username someUsername -password somePassword 
-            -logFile /path/to/logs.txt"
-            """.trimIndent()
-    }
+    private fun createInstance() = ActivateProLicenseCommand(
+        object : LicenseCommandContext {
+            override val build = this@ActivateProLicenseCommandTest.build
+            override val buildLogger = this@ActivateProLicenseCommandTest.buildLogger
+            override val fileSystemService = this@ActivateProLicenseCommandTest.fileSystemService
+            override val environmentVariables = mapOf<String, String>()
+            override val workingDirectory = workingDirectoryPath
 
-    private fun createInstance() = ActivateProLicenseCommand(runnerContext, fileSystemService)
+            override fun resolvePath(path: String) = path
+        },
+    )
 }

@@ -15,32 +15,32 @@ import jetbrains.buildServer.agent.ToolProvider
 import jetbrains.buildServer.agent.ToolProvidersRegistry
 import jetbrains.buildServer.agent.config.AgentParametersSupplier
 import jetbrains.buildServer.unity.DetectionMode
-import jetbrains.buildServer.unity.UnityConstants
+import jetbrains.buildServer.unity.UnityBuildRunnerContext
+import jetbrains.buildServer.unity.UnityConstants.BUILD_FEATURE_TYPE
+import jetbrains.buildServer.unity.UnityConstants.PARAM_DETECTION_MODE
+import jetbrains.buildServer.unity.UnityConstants.PARAM_UNITY_ROOT
+import jetbrains.buildServer.unity.UnityConstants.PARAM_UNITY_VERSION
 import jetbrains.buildServer.unity.UnityConstants.RUNNER_DISPLAY_NAME
 import jetbrains.buildServer.unity.UnityConstants.RUNNER_TYPE
 import jetbrains.buildServer.unity.UnityConstants.UNITY_CONFIG_NAME
 import jetbrains.buildServer.unity.UnityEnvironment
-import jetbrains.buildServer.unity.ProjectAssociatedUnityVersionIdentifier
-import jetbrains.buildServer.unity.UnityConstants.PARAM_DETECTION_MODE
-import jetbrains.buildServer.unity.UnityProjectFilesAccessor
 import jetbrains.buildServer.unity.UnityVersion
 import jetbrains.buildServer.unity.UnityVersion.Companion.parseVersion
+import jetbrains.buildServer.unity.UnityVersion.Companion.tryParseVersion
 import jetbrains.buildServer.unity.util.unityRootParam
 import jetbrains.buildServer.unity.util.unityVersionParam
 import jetbrains.buildServer.util.EventDispatcher
 import java.io.File
-import java.io.InputStream
 
 /**
  * Determines tool location.
  */
 class UnityToolProvider(
     private val agentConfiguration: BuildAgentConfiguration,
-    private val projectAssociatedUnityVersionIdentifier: ProjectAssociatedUnityVersionIdentifier,
     unityDetectorFactory: UnityDetectorFactory,
     toolsRegistry: ToolProvidersRegistry,
     extensionHolder: ExtensionHolder,
-    events: EventDispatcher<AgentLifeCycleListener>
+    events: EventDispatcher<AgentLifeCycleListener>,
 ) : AgentLifeCycleAdapter(), AgentParametersSupplier, ToolProvider {
 
     private val unityDetector = unityDetectorFactory.unityDetector()
@@ -90,32 +90,28 @@ class UnityToolProvider(
     }
 
     override fun getPath(toolName: String): String {
-        return getUnity(toolName).unityPath
+        ensureToolIsSupported(toolName)
+
+        // We're unable to detect the environment without build settings, fallback to the latest available version
+        return unityVersions.getLatestEnvironment().unityPath
     }
 
     override fun getPath(
         toolName: String,
         ignored: AgentRunningBuild,
-        runner: BuildRunnerContext
+        runner: BuildRunnerContext,
     ): String {
-        return getUnity(toolName, runner).unityPath
+        ensureToolIsSupported(toolName)
+        return getUnity(UnityBuildRunnerContext(runner)).unityPath
     }
 
-    fun getUnity(toolName: String, runnerContext: BuildRunnerContext? = null): UnityEnvironment {
-        if (!supports(toolName)) {
-            throw ToolCannotBeFoundException("Unsupported tool $toolName")
-        }
+    fun getUnity(runnerContext: UnityBuildRunnerContext): UnityEnvironment {
+        val detectionMode = getDetectionMode(
+            runnerContext.runnerParameters[PARAM_DETECTION_MODE],
+            runnerContext.unityRootParam(),
+        )
 
-        // We're unable to detect the environment without the runner context, fallback to the latest available version
-        if (runnerContext == null) {
-            return unityVersions.getLatestEnvironment()
-        }
-
-        val detectionMode = runnerContext.runnerParameters[PARAM_DETECTION_MODE]?.let {
-            DetectionMode.tryParse(it)
-        } ?: if (runnerContext.unityRootParam().isNullOrEmpty()) DetectionMode.Auto else DetectionMode.Manual
-
-        val environment =  when (detectionMode) {
+        val environment = when (detectionMode) {
             DetectionMode.Auto -> {
                 discoverUnityByVersion(runnerContext)
             }
@@ -124,12 +120,49 @@ class UnityToolProvider(
             }
         }
 
-        LOG.info("Unity version '${environment.unityVersion}' located at '${environment.unityPath}' was chosen for the build")
+        LOG.info("Unity '${environment.unityVersion}' located at '${environment.unityPath}' was chosen based on build step settings")
 
         return environment
     }
 
-    private fun discoverUnityByVersion(runnerContext: BuildRunnerContext): UnityEnvironment {
+    fun getUnity(build: AgentRunningBuild): UnityEnvironment {
+        val feature = build.getBuildFeaturesOfType(BUILD_FEATURE_TYPE).single()
+        val detectionMode = getDetectionMode(
+            feature.parameters[PARAM_DETECTION_MODE],
+            feature.parameters[PARAM_UNITY_ROOT],
+        )
+
+        val environment = when (detectionMode) {
+            DetectionMode.Auto -> {
+                tryParseVersion(feature.parameters[PARAM_UNITY_VERSION])?.let {
+                    getUnityByVersion(it)
+                } ?: unityVersions.getLatestEnvironment()
+            }
+            DetectionMode.Manual -> {
+                discoverUnityByPath(feature.parameters[PARAM_UNITY_ROOT])
+            }
+        }
+
+        LOG.info("Unity '${environment.unityVersion}' located at '${environment.unityPath}' was chosen based on build settings")
+
+        return environment
+    }
+
+    private fun getDetectionMode(rawValue: String?, unityRoot: String?) = rawValue
+        ?.let { DetectionMode.tryParse(it) }
+        ?: if (unityRoot.isNullOrEmpty()) {
+            DetectionMode.Auto
+        } else {
+            DetectionMode.Manual
+        }
+
+    private fun ensureToolIsSupported(toolName: String) {
+        if (!supports(toolName)) {
+            throw ToolCannotBeFoundException("Unsupported tool $toolName")
+        }
+    }
+
+    private fun discoverUnityByVersion(runnerContext: UnityBuildRunnerContext): UnityEnvironment {
         val unityVersion = runnerContext.unityVersionParam()
 
         if (unityVersion == null) {
@@ -137,15 +170,19 @@ class UnityToolProvider(
             return implicitlySelectProperUnity(runnerContext)
         }
 
-        unityVersions[unityVersion]?.let { path ->
-            return createEnvironment(path, unityVersion)
+        return getUnityByVersion(unityVersion)
+    }
+
+    private fun getUnityByVersion(version: UnityVersion): UnityEnvironment {
+        unityVersions[version]?.let { path ->
+            return createEnvironment(path, version)
         }
 
-        val upperVersion = getUpperVersion(unityVersion)
-        LOG.info("Specified Unity '$unityVersion' version was not found. Will try to find the latest version up to '$upperVersion'")
+        val upperVersion = getUpperVersion(version)
+        LOG.info("Specified Unity '$version' version was not found. Will try to find the latest version up to '$upperVersion'")
         unityVersions.entries
             .filter {
-                it.key >= unityVersion && it.key < upperVersion
+                it.key >= version && it.key < upperVersion
             }
             .maxByOrNull { it.key }
             ?.let { (version, path) ->
@@ -154,13 +191,13 @@ class UnityToolProvider(
 
         throw ToolCannotBeFoundException(
             """
-            Unable to locate tool $RUNNER_TYPE $unityVersion in system. 
+            Unable to locate tool $RUNNER_TYPE $version in system. 
             Please make sure to specify UNITY_PATH environment variable
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 
-    private fun implicitlySelectProperUnity(runnerContext: BuildRunnerContext): UnityEnvironment {
+    private fun implicitlySelectProperUnity(runnerContext: UnityBuildRunnerContext): UnityEnvironment {
         tryToFindAssociatedUnityVersion(runnerContext)?.let { version ->
             unityVersions[version]?.let { path ->
                 return createEnvironment(path, version)
@@ -173,48 +210,24 @@ class UnityToolProvider(
         return unityVersions.getLatestEnvironment()
     }
 
-    private fun discoverUnityByPath(runnerContext: BuildRunnerContext): UnityEnvironment {
-        val rootPath = runnerContext.unityRootParam()
-
+    private fun discoverUnityByPath(rootPath: String?): UnityEnvironment {
         if (rootPath.isNullOrEmpty()) { throw ToolCannotBeFoundException(
-            "Unable to locate tool $RUNNER_TYPE in system. Manual detection mode has been chosen, but no path has been specified"
-        )}
+            "Unable to locate tool $RUNNER_TYPE in system. Manual detection mode has been chosen, but no path has been specified",
+        ) }
 
-        val version =
-            unityDetector.getVersionFromInstall(File(rootPath)) ?: throw ToolCannotBeFoundException(
-                "Unable to locate tool $RUNNER_TYPE in system. Please make sure correct Unity binary tool is installed"
+        val version = unityDetector.getVersionFromInstall(File(rootPath))
+            ?: throw ToolCannotBeFoundException(
+                "Unable to locate tool $RUNNER_TYPE in system. Please make sure correct Unity binary tool is installed",
             )
 
         return createEnvironment(rootPath, version)
     }
 
-    private fun tryToFindAssociatedUnityVersion(runnerContext: BuildRunnerContext): UnityVersion? {
-        val projectPath = runnerContext.runnerParameters[UnityConstants.PARAM_PROJECT_PATH].let {
-            val relativeProjectPath = if (!it.isNullOrBlank()) {
-                it.trim()
-            } else {
-                ""
-            }
+    private fun discoverUnityByPath(runnerContext: UnityBuildRunnerContext) =
+        discoverUnityByPath(runnerContext.unityRootParam())
 
-            File(runnerContext.workingDirectory.absolutePath, relativeProjectPath)
-        }
-
-        return projectAssociatedUnityVersionIdentifier.identify(
-            object : UnityProjectFilesAccessor {
-                private var current = projectPath
-
-                override fun directory(name: String): UnityProjectFilesAccessor? {
-                    current = current.listFiles()?.firstOrNull { it.isDirectory && it.name == name } ?: return null
-                    return this
-                }
-
-                override fun file(name: String): InputStream? {
-                    val file = current.listFiles()?.firstOrNull { it.isFile && it.name == name } ?: return null
-                    return file.inputStream()
-                }
-            }
-        )
-    }
+    private fun tryToFindAssociatedUnityVersion(runnerContext: UnityBuildRunnerContext): UnityVersion? =
+        runnerContext.unityProject.unityVersion
 
     private fun Map<UnityVersion, String>.getLatestEnvironment(): UnityEnvironment {
         return entries

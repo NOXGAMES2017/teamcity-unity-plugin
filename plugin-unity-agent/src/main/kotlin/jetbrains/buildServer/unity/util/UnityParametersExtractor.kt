@@ -1,12 +1,15 @@
 package jetbrains.buildServer.unity.util
 
+import jetbrains.buildServer.agent.AgentRunningBuild
 import jetbrains.buildServer.agent.BuildRunnerContext
 import jetbrains.buildServer.unity.UnityConstants.BUILD_FEATURE_TYPE
 import jetbrains.buildServer.unity.UnityConstants.PARAM_ACTIVATE_LICENSE
+import jetbrains.buildServer.unity.UnityConstants.PARAM_UNITY_LICENSE_SCOPE
 import jetbrains.buildServer.unity.UnityConstants.PARAM_UNITY_LICENSE_TYPE
 import jetbrains.buildServer.unity.UnityConstants.PARAM_UNITY_PERSONAL_LICENSE_CONTENT
 import jetbrains.buildServer.unity.UnityConstants.PARAM_UNITY_ROOT
 import jetbrains.buildServer.unity.UnityConstants.PARAM_UNITY_VERSION
+import jetbrains.buildServer.unity.UnityLicenseScope
 import jetbrains.buildServer.unity.UnityLicenseTypeParameter
 import jetbrains.buildServer.unity.UnityVersion
 import jetbrains.buildServer.unity.UnityVersion.Companion.tryParseVersion
@@ -42,10 +45,13 @@ fun BuildRunnerContext.unityVersionParam(): UnityVersion? {
     return null
 }
 
-fun BuildRunnerContext.unityLicenseTypeParam(): UnityLicenseTypeParameter? {
+fun BuildRunnerContext.unityLicenseTypeParam() = this.build.unityLicenseTypeParam()
+
+fun AgentRunningBuild.unityLicenseTypeParam(): UnityLicenseTypeParameter? {
     unityBuildFeatureParams(this)?.let { params ->
-        if (params[PARAM_ACTIVATE_LICENSE].toBoolean())
+        if (params[PARAM_ACTIVATE_LICENSE].toBoolean()) {
             return UnityLicenseTypeParameter.PROFESSIONAL
+        }
         params[PARAM_UNITY_LICENSE_TYPE]?.let { licenseTypeId ->
             return UnityLicenseTypeParameter.from(licenseTypeId)
         }
@@ -60,5 +66,16 @@ fun BuildRunnerContext.unityPersonalLicenseContentParam(): String? {
     return null
 }
 
-private fun unityBuildFeatureParams(runnerContext: BuildRunnerContext) =
-    runnerContext.build.getBuildFeaturesOfType(BUILD_FEATURE_TYPE).firstOrNull()?.parameters
+fun AgentRunningBuild.unityLicenseScopeParam(): UnityLicenseScope? {
+    unityBuildFeatureParams(this)?.let { params ->
+        params[PARAM_UNITY_LICENSE_SCOPE]?.let { licenseScopeId ->
+            return UnityLicenseScope.from(licenseScopeId)
+        }
+    }
+    return null
+}
+
+private fun unityBuildFeatureParams(runnerContext: BuildRunnerContext) = unityBuildFeatureParams(runnerContext.build)
+
+private fun unityBuildFeatureParams(build: AgentRunningBuild) =
+    build.getBuildFeaturesOfType(BUILD_FEATURE_TYPE).firstOrNull()?.parameters
