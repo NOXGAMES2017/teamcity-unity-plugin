@@ -144,7 +144,7 @@ class UnityLoggingListener(
     companion object {
         private val defaultBlock = DefaultBlock()
         private val loggers = listOf(
-            //BuildReportBlock(),
+            BuildReportBlock(),
             CommandLineBlock(),
             CompileBlock(),
             ExtensionsBlock(),
@@ -173,7 +173,8 @@ class UnityLoggingListener(
             CompilationInfoLogs(),
             StartImportingBlock(),
             MemoryStatisticsBlock(),
-            GoogleStackTraceBlock()
+            GoogleStackTraceBlock(),
+            InfoProcessorBlock()
         )
     }
 }
